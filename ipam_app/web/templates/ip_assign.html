@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}IP&#20998;&#37197;{% endblock %}
+{% block content %}
+<div class="page-header"><h1>&#31354;&#38386; IP &#22320;&#22336;&#33258;&#21160;&#20998;&#37197;</h1></div>
+
+<div class="card">
+    <div class="form-row">
+        <div class="form-group">
+            <label>&#19994;&#21153;&#21517;&#31216;</label>
+            <select id="assign-biz">
+                <option value="">&#20840;&#37096;&#19994;&#21153;</option>
+                {% for biz in businesses %}
+                <option value="{{ biz }}">{{ biz }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>&#30003;&#35831;&#25968;&#37327;</label>
+            <input type="number" id="assign-count" value="1" min="1" max="100">
+        </div>
+        <div class="form-group">
+            <label>&#23376;&#32593;&#25513;&#30721;&#20301;&#25968; (&#22914; /30 &#36755;&#20837; 30)</label>
+            <input type="number" id="assign-mask" value="32" min="24" max="32">
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button id="assign-button" class="btn btn-primary" type="button" onclick="assignIPs()">&#33258;&#21160;&#20998;&#37197;</button>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top:20px">
+    <h3>&#22320;&#22336;&#24635;&#34920;</h3>
+    <table class="data-table">
+        <thead><tr><th>&#19994;&#21153;&#21517;&#31216;</th><th>&#22320;&#22336;&#27573;</th><th>&#25513;&#30721;</th></tr></thead>
+        <tbody>
+            {% for row in master_pool %}
+            <tr>
+                <td>{{ row.get('业务名称', '') }}</td>
+                <td>{{ row.get('地址段', '') }}</td>
+                <td>{{ row.get('掩码', '') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="assign-result" style="margin-top:20px"></div>
+
+<script>
+var ASSIGN_TEXT = {
+    loading: '\u6b63\u5728\u5206\u914d\uff0c\u8bf7\u7a0d\u5019...',
+    button: '\u81ea\u52a8\u5206\u914d',
+    buttonLoading: '\u5206\u914d\u4e2d...',
+    success: '\u5206\u914d\u7ed3\u679c',
+    failed: '\u5206\u914d\u5931\u8d25',
+    loginExpired: '\u767b\u5f55\u72b6\u6001\u53ef\u80fd\u5df2\u8fc7\u671f\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u65b0\u767b\u5f55',
+    networkError: '\u8bf7\u6c42\u5931\u8d25\uff1a'
+};
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function parseJsonResponse(response) {
+    var contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        throw new Error(ASSIGN_TEXT.loginExpired);
+    }
+    return response.json();
+}
+
+function renderAssignResult(d) {
+    var html = '<div class="card"><h3>' + (d.success ? ASSIGN_TEXT.success : ASSIGN_TEXT.failed) + '</h3>';
+    html += '<p>' + escapeHtml(d.message || '') + '</p>';
+    if (d.success && d.allocated && d.allocated.length) {
+        html += '<ol>';
+        for (var i = 0; i < d.allocated.length; i++) {
+            html += '<li><strong>' + escapeHtml(d.allocated[i]) + '</strong></li>';
+        }
+        html += '</ol>';
+    }
+    html += '</div>';
+    return html;
+}
+
+function assignIPs() {
+    var biz = document.getElementById('assign-biz').value;
+    var count = parseInt(document.getElementById('assign-count').value, 10);
+    var mask = parseInt(document.getElementById('assign-mask').value, 10);
+    var btn = document.getElementById('assign-button');
+    var output = document.getElementById('assign-result');
+
+    if (!count || count < 1) {
+        output.innerHTML = '<div class="card"><h3>' + ASSIGN_TEXT.failed + '</h3><p>\u7533\u8bf7\u6570\u91cf\u5fc5\u987b\u5927\u4e8e 0</p></div>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = ASSIGN_TEXT.buttonLoading;
+    output.innerHTML = '<div class="card"><p>' + ASSIGN_TEXT.loading + '</p></div>';
+
+    fetch('/api/ip/assign', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({biz: biz, count: count, mask: mask})
+    })
+        .then(parseJsonResponse)
+        .then(function(d) {
+            output.innerHTML = renderAssignResult(d);
+        })
+        .catch(function(err) {
+            output.innerHTML = '<div class="card"><h3>' + ASSIGN_TEXT.failed + '</h3><p>' + ASSIGN_TEXT.networkError + escapeHtml(err.message) + '</p></div>';
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = ASSIGN_TEXT.button;
+        });
+}
+</script>
+{% endblock %}

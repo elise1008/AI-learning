@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}备份管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>备份管理</h1>
+    <button class="btn btn-primary" onclick="doBackup()">立即备份</button>
+</div>
+
+<div class="card" style="margin-top:20px">
+    <h3>备份列表</h3>
+    <table class="data-table">
+        <thead><tr><th>备份时间</th><th>文件数</th><th>操作</th></tr></thead>
+        <tbody>
+            {% for b in backups %}
+            <tr>
+                <td>{{ b.name }}</td>
+                <td>{{ b.file_count }}</td>
+                <td>
+                    <button class="btn btn-sm btn-warning" onclick="restoreBackup('{{ b.name }}')">恢复</button>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div id="backup-result" style="margin-top:20px"></div>
+
+<script>
+function doBackup() {
+    fetch('/api/backup/manual', {method:'POST'}).then(r=>r.json()).then(function(d){
+        document.getElementById('backup-result').innerHTML = '<div class="card"><p>' + d.message + '</p></div>';
+        setTimeout(function(){ location.reload(); }, 1500);
+    });
+}
+function restoreBackup(name) {
+    if(!confirm('确认恢复到备份 ' + name + '? 当前数据将被覆盖!')) return;
+    fetch('/api/backup/restore', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({name:name})
+    }).then(r=>r.json()).then(function(d){
+        document.getElementById('backup-result').innerHTML = '<div class="card"><p>' + d.message + '</p></div>';
+    });
+}
+</script>
+{% endblock %}

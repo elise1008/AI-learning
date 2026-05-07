@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Loopback管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>路由器 Loopback 管理</h1>
+    {% if role == 'admin' %}
+    <button class="btn btn-primary" onclick="showLoopbackForm()">+ 新增</button>
+    {% endif %}
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead><tr><th>设备名称</th><th>loopback0</th><th>loopback1</th><th>登录账号</th><th>登录方式</th>{% if role == 'admin' %}<th>操作</th>{% endif %}</tr></thead>
+        <tbody>
+            {% for lb in loopbacks %}
+            <tr>
+                <td>{{ lb.get('设备名称', '') }}</td>
+                <td>{{ lb.get('loopback0', '') }}</td>
+                <td>{{ lb.get('loopback1', '') }}</td>
+                <td>{{ lb.get('登录账号', '') }}</td>
+                <td>{{ lb.get('登录方式', '') }}</td>
+                {% if role == 'admin' %}
+                <td>
+                    <button class="btn btn-sm" onclick="editLoopback('{{ lb.get('设备名称','') }}')">编辑</button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if role == 'admin' %}
+<div id="loopback-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3 id="loopback-modal-title">新增Loopback</h3>
+        <form id="loopback-form">
+            <input type="hidden" id="lb-orig-name">
+            <div class="form-row">
+                <div class="form-group"><label>设备名称</label><input type="text" id="lb-name" required></div>
+                <div class="form-group"><label>loopback0</label><input type="text" id="lb0"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>loopback1</label><input type="text" id="lb1"></div>
+                <div class="form-group"><label>登录方式</label><input type="text" id="lb-method"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>登录账号</label><input type="text" id="lb-account"></div>
+                <div class="form-group"><label>密码</label><input type="password" id="lb-pwd"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn" onclick="closeLoopbackModal()">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+{% if role == 'admin' %}
+function showLoopbackForm() {
+    document.getElementById('loopback-modal-title').textContent = '新增Loopback';
+    document.getElementById('loopback-form').reset();
+    document.getElementById('lb-orig-name').value = '';
+    document.getElementById('lb-name').readOnly = false;
+    document.getElementById('loopback-modal').style.display = 'flex';
+}
+function editLoopback(name) {
+    document.getElementById('loopback-modal-title').textContent = '编辑Loopback: ' + name;
+    document.getElementById('lb-orig-name').value = name;
+    document.getElementById('lb-name').value = name;
+    document.getElementById('lb-name').readOnly = true;
+    document.getElementById('loopback-modal').style.display = 'flex';
+}
+function closeLoopbackModal() { document.getElementById('loopback-modal').style.display = 'none'; }
+document.getElementById('loopback-form').onsubmit = function(e) {
+    e.preventDefault();
+    var orig = document.getElementById('lb-orig-name').value;
+    var data = {
+        设备名称: document.getElementById('lb-name').value,
+        loopback0: document.getElementById('lb0').value,
+        loopback1: document.getElementById('lb1').value,
+        登录方式: document.getElementById('lb-method').value,
+        登录账号: document.getElementById('lb-account').value,
+        密码: document.getElementById('lb-pwd').value,
+    };
+    var url = orig ? '/api/loopbacks/update' : '/api/loopbacks/add';
+    if(orig) { data._设备名称 = orig; }
+    fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+        .then(r=>r.json()).then(function(d){ alert(d.message); location.reload(); });
+};
+{% endif %}
+</script>
+{% endblock %}

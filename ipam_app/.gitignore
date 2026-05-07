@@ -1,0 +1,11 @@
+data/
+backup/
+build/
+export/
+logs/
+dist/
+__pycache__/
+_MEI*/
+*.pyc
+*.pyo
+*.pyd

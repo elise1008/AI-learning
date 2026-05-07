@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}路由拓扑图{% endblock %}
+{% block content %}
+<div class="page-header"><h1>路由拓扑图</h1></div>
+
+<div class="card">
+    <button class="btn btn-primary" onclick="generateTopology()">生成拓扑图</button>
+    <span id="topo-status"></span>
+</div>
+
+<div id="topo-image" class="card" style="margin-top:20px;text-align:center;display:none">
+    <img id="topo-img" style="max-width:100%" alt="拓扑图">
+</div>
+
+<div class="card" style="margin-top:20px">
+    <h2>主链路 / 备用链路分析</h2>
+    <div class="form-row">
+        <div class="form-group">
+            <label>源设备</label>
+            <select id="path-source">
+                <option value="">-- 选择 --</option>
+                {% for d in devices %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group">
+            <label>目标设备</label>
+            <select id="path-target">
+                <option value="">-- 选择 --</option>
+                {% for d in devices %}
+                <option value="{{ d }}">{{ d }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button class="btn btn-primary" onclick="analyzePath()">分析链路</button>
+        </div>
+    </div>
+</div>
+
+<div id="path-result" style="margin-top:20px"></div>
+<div id="path-image" style="margin-top:20px;text-align:center;display:none">
+    <img id="path-img" style="max-width:100%" alt="链路分析图">
+</div>
+
+<div class="card" style="margin-top:20px">
+    <h3>链路明细表</h3>
+    <table class="data-table">
+        <thead><tr><th>本端设备</th><th>本端接口</th><th>本端IP</th><th>掩码</th><th>对端设备</th><th>对端接口</th><th>对端IP</th><th>掩码</th><th>cost</th></tr></thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.get('本端设备名', '') }}</td>
+                <td>{{ link.get('本端接口', '') }}</td>
+                <td>{{ link.get('本端IP', '') }}</td>
+                <td>{{ link.get('掩码', '') }}</td>
+                <td>{{ link.get('对端设备名', '') }}</td>
+                <td>{{ link.get('对端接口', '') }}</td>
+                <td>{{ link.get('对端IP', '') }}</td>
+                <td>{{ link.get('掩码', '') }}</td>
+                <td>{{ link.get('cost', '') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function generateTopology() {
+    document.getElementById('topo-status').textContent = ' 生成中...';
+    fetch('/api/topology/generate').then(r=>r.json()).then(function(d){
+        if(d.success) {
+            document.getElementById('topo-img').src = '/api/topology/image/topology?t=' + Date.now();
+            document.getElementById('topo-image').style.display = 'block';
+            document.getElementById('topo-status').textContent = ' 完成!';
+        } else {
+            document.getElementById('topo-status').textContent = ' ' + d.message;
+        }
+    });
+}
+function analyzePath() {
+    var source = document.getElementById('path-source').value;
+    var target = document.getElementById('path-target').value;
+    if(!source||!target) return;
+    fetch('/api/topology/path', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({source:source, target:target})
+    }).then(r=>r.json()).then(function(d){
+        var a = d.analysis;
+        var html = '<div class="card"><h3>链路分析结果</h3>';
+        if(a.success) {
+            html += '<p><strong>主链路</strong> (cost=' + a.primary_cost + '): ' + a.primary.join(' → ') + '</p>';
+            if(a.backup && a.backup.length) {
+                html += '<p><strong>备用链路</strong> (cost=' + a.backup_cost + '): ' + a.backup.join(' → ') + '</p>';
+            } else {
+                html += '<p><strong>备用链路</strong>: 无</p>';
+            }
+            if(d.image_path) {
+                document.getElementById('path-img').src = '/api/topology/image/path?t=' + Date.now();
+                document.getElementById('path-image').style.display = 'block';
+            }
+        } else {
+            html += '<p>' + a.message + '</p>';
+        }
+        html += '</div>';
+        document.getElementById('path-result').innerHTML = html;
+    });
+}
+</script>
+{% endblock %}

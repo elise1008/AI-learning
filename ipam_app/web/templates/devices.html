@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block title %}&#35774;&#22791;&#31649;&#29702;{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>&#35774;&#22791;&#31649;&#29702;</h1>
+    <div class="toolbar">
+        <select id="biz-filter" onchange="filterBiz(this.value)">
+            <option value="">&#20840;&#37096;&#19994;&#21153;</option>
+            {% for biz in businesses %}
+            <option value="{{ biz }}" {% if current_biz == biz %}selected{% endif %}>{{ biz }}</option>
+            {% endfor %}
+        </select>
+        {% if role == 'admin' %}
+        <button class="btn btn-primary" onclick="showAddForm()">+ &#26032;&#22686;&#35774;&#22791;</button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>&#19994;&#21153;</th>
+                {% for col in columns %}
+                <th>{{ col }}</th>
+                {% endfor %}
+                {% if role == 'admin' %}<th>&#25805;&#20316;</th>{% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in devices %}
+            <tr>
+                <td><span class="badge">{{ d.get('_业务', '') }}</span></td>
+                {% for col in columns %}
+                <td>{{ d.get(col, '') }}</td>
+                {% endfor %}
+                {% if role == 'admin' %}
+                <td>
+                    <button class="btn btn-sm" onclick="editDevice('{{ d.get('_业务', '') }}', '{{ d.get('设备名称', '') }}')">&#32534;&#36753;</button>
+                    <button class="btn btn-sm btn-danger" onclick="deleteDevice('{{ d.get('_业务', '') }}', '{{ d.get('设备名称', '') }}')">&#21024;&#38500;</button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if role == 'admin' %}
+<div id="device-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3 id="modal-title">&#26032;&#22686;&#35774;&#22791;</h3>
+        <form id="device-form">
+            <input type="hidden" id="biz-name">
+            <input type="hidden" id="orig-name">
+            <div id="device-fields"></div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">&#20445;&#23384;</button>
+                <button type="button" class="btn" onclick="closeModal()">&#21462;&#28040;</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterBiz(val) {
+    window.location.href = '?biz=' + encodeURIComponent(val);
+}
+
+{% if role == 'admin' %}
+var businessColumns = {{ business_columns|tojson }};
+var deviceRows = {{ devices|tojson }};
+
+function getColumns(biz) {
+    return businessColumns[biz] || [];
+}
+
+function renderFields(biz, row) {
+    var container = document.getElementById('device-fields');
+    var columns = getColumns(biz);
+    var html = '';
+    for (var i = 0; i < columns.length; i++) {
+        var col = columns[i];
+        var value = row && row[col] ? row[col] : '';
+        var inputType = col === '密码' ? 'password' : 'text';
+        html += '<div class="form-group">';
+        html += '<label>' + col + '</label>';
+        html += '<input type="' + inputType + '" data-col="' + col + '" value="' + String(value).replace(/"/g, '&quot;') + '"' + (col === '设备名称' ? ' required' : '') + '>';
+        html += '</div>';
+    }
+    container.innerHTML = html;
+}
+
+function showAddForm() {
+    var biz = document.getElementById('biz-filter').value;
+    if (!biz) {
+        alert('请先选择一个业务，再新增设备。');
+        return;
+    }
+    document.getElementById('modal-title').textContent = '新增设备 - ' + biz;
+    document.getElementById('biz-name').value = biz;
+    document.getElementById('orig-name').value = '';
+    renderFields(biz, null);
+    document.getElementById('device-modal').style.display = 'flex';
+}
+
+function editDevice(biz, name) {
+    var row = null;
+    for (var i = 0; i < deviceRows.length; i++) {
+        if (deviceRows[i]['_业务'] === biz && deviceRows[i]['设备名称'] === name) {
+            row = deviceRows[i];
+            break;
+        }
+    }
+    document.getElementById('modal-title').textContent = '编辑设备: ' + name;
+    document.getElementById('biz-name').value = biz;
+    document.getElementById('orig-name').value = name;
+    renderFields(biz, row);
+    document.getElementById('device-modal').style.display = 'flex';
+}
+
+function closeModal() {
+    document.getElementById('device-modal').style.display = 'none';
+}
+
+function deleteDevice(biz, name) {
+    if (!confirm('确认删除设备 ' + name + '?')) return;
+    var payload = {};
+    payload['_业务'] = biz;
+    payload['设备名称'] = name;
+    fetch('/api/devices/delete', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        alert(d.message);
+        location.reload();
+    });
+}
+
+document.getElementById('device-form').onsubmit = function(e) {
+    e.preventDefault();
+    var biz = document.getElementById('biz-name').value;
+    var orig = document.getElementById('orig-name').value;
+    var data = {};
+    data['_业务'] = biz;
+
+    var inputs = document.querySelectorAll('#device-fields input[data-col]');
+    for (var i = 0; i < inputs.length; i++) {
+        data[inputs[i].getAttribute('data-col')] = inputs[i].value;
+    }
+
+    var url = orig ? '/api/devices/update' : '/api/devices/add';
+    if (orig) {
+        data['_设备名称'] = orig;
+    }
+    fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    }).then(function(r) { return r.json(); }).then(function(d) {
+        alert(d.message);
+        location.reload();
+    });
+};
+{% endif %}
+</script>
+{% endblock %}

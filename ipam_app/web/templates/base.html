@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}IPAM - 网络地址管理助手{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    {% block head %}{% endblock %}
+</head>
+<body>
+    <div class="app-container">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h2>IPAM</h2>
+                <span class="subtitle">网络地址管理</span>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">🏠 首页</a></li>
+                <li><a href="{{ url_for('devices_page') }}" class="{% if request.endpoint == 'devices_page' %}active{% endif %}">📋 设备管理</a></li>
+                <li><a href="{{ url_for('query_page') }}" class="{% if request.endpoint == 'query_page' %}active{% endif %}">🔍 查询信息</a></li>
+                {% if role == 'admin' %}
+                <li><a href="{{ url_for('ip_assign_page') }}" class="{% if request.endpoint == 'ip_assign_page' %}active{% endif %}">🎯 IP分配</a></li>
+                <li><a href="{{ url_for('import_page') }}" class="{% if request.endpoint == 'import_page' %}active{% endif %}">📥 导入数据</a></li>
+                {% endif %}
+                <li><a href="{{ url_for('topology_page') }}" class="{% if request.endpoint == 'topology_page' %}active{% endif %}">🗺️ 拓扑图</a></li>
+                <li><a href="{{ url_for('links_page') }}" class="{% if request.endpoint == 'links_page' %}active{% endif %}">🔗 链路管理</a></li>
+                <li><a href="{{ url_for('loopbacks_page') }}" class="{% if request.endpoint == 'loopbacks_page' %}active{% endif %}">🔄 Loopback</a></li>
+                <li><a href="{{ url_for('master_pool_page') }}" class="{% if request.endpoint == 'master_pool_page' %}active{% endif %}">📊 地址总表</a></li>
+                {% if role == 'admin' %}
+                <li><a href="{{ url_for('backup_page') }}" class="{% if request.endpoint == 'backup_page' %}active{% endif %}">💾 备份管理</a></li>
+                <li><a href="{{ url_for('logs_page') }}" class="{% if request.endpoint == 'logs_page' %}active{% endif %}">📝 操作日志</a></li>
+                {% endif %}
+            </ul>
+            <div class="sidebar-footer">
+                <span class="user-badge">{{ '🔑 管理员' if role == 'admin' else '👁️ 查询模式' }}</span>
+                <a href="{{ url_for('logout') }}" class="logout-btn">退出</a>
+            </div>
+        </nav>
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            <div class="flash-messages">
+                {% for category, message in messages %}
+                <div class="flash flash-{{ category }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

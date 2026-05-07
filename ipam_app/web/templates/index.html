@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}IPAM 首页{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>网络地址管理助手</h1>
+    <p>离线版 IPAM - 企业内网地址统一管理</p>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-num">{{ stats.devices }}</div>
+        <div class="stat-label">管理设备数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-num">{{ stats.links }}</div>
+        <div class="stat-label">路由链路数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-num">{{ stats.loopbacks }}</div>
+        <div class="stat-label">Loopback数</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-num">{{ stats.backups }}</div>
+        <div class="stat-label">备份数量</div>
+    </div>
+</div>
+
+<div class="quick-actions">
+    <h2>快捷操作</h2>
+    <div class="action-grid">
+        <a href="{{ url_for('devices_page') }}" class="action-card">
+            <span class="action-icon">📋</span>
+            <span>设备管理</span>
+        </a>
+        <a href="{{ url_for('query_page') }}" class="action-card">
+            <span class="action-icon">🔍</span>
+            <span>查询信息</span>
+        </a>
+        {% if role == 'admin' %}
+        <a href="{{ url_for('ip_assign_page') }}" class="action-card">
+            <span class="action-icon">🎯</span>
+            <span>IP分配</span>
+        </a>
+        <a href="{{ url_for('import_page') }}" class="action-card">
+            <span class="action-icon">📥</span>
+            <span>导入数据</span>
+        </a>
+        {% endif %}
+        <a href="{{ url_for('topology_page') }}" class="action-card">
+            <span class="action-icon">🗺️</span>
+            <span>拓扑图</span>
+        </a>
+        <a href="{{ url_for('links_page') }}" class="action-card">
+            <span class="action-icon">🔗</span>
+            <span>链路管理</span>
+        </a>
+    </div>
+</div>
+{% endblock %}

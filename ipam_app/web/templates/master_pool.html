@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}地址总表{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>地址总表</h1>
+    {% if role == 'admin' %}
+    <button class="btn btn-primary" onclick="showPoolForm()">+ 新增</button>
+    {% endif %}
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead><tr><th>业务名称</th><th>地址段</th><th>掩码</th></tr></thead>
+        <tbody>
+            {% for row in pool %}
+            <tr>
+                <td>{{ row.get('业务名称', '') }}</td>
+                <td>{{ row.get('地址段', '') }}</td>
+                <td>{{ row.get('掩码', '') }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if role == 'admin' %}
+<div id="pool-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3>新增地址总表记录</h3>
+        <form id="pool-form">
+            <div class="form-group"><label>业务名称</label><input type="text" id="pool-biz" required></div>
+            <div class="form-group"><label>地址段</label><input type="text" id="pool-addr" required></div>
+            <div class="form-group"><label>掩码</label><input type="text" id="pool-mask"></div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn" onclick="closePoolModal()">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+{% if role == 'admin' %}
+function showPoolForm() {
+    document.getElementById('pool-form').reset();
+    document.getElementById('pool-modal').style.display = 'flex';
+}
+function closePoolModal() { document.getElementById('pool-modal').style.display = 'none'; }
+document.getElementById('pool-form').onsubmit = function(e) {
+    e.preventDefault();
+    var data = {
+        业务名称: document.getElementById('pool-biz').value,
+        地址段: document.getElementById('pool-addr').value,
+        掩码: document.getElementById('pool-mask').value,
+    };
+    fetch('/api/master-pool/add', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+    }).then(r=>r.json()).then(function(d){ alert(d.message); location.reload(); });
+};
+{% endif %}
+</script>
+{% endblock %}

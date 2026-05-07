@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}&#26597;&#35810;{% endblock %}
+{% block content %}
+<div class="page-header"><h1>&#26597;&#35810;&#20449;&#24687;</h1></div>
+
+<div class="search-box">
+    <select id="query-type">
+        <option value="name">&#25353;&#35774;&#22791;&#21517;&#31216;</option>
+        <option value="ip" selected>&#25353;IP&#22320;&#22336;</option>
+        {% if role == 'admin' %}
+        <option value="account">&#23494;&#30721;&#26597;&#35810; (&#38544;&#34255;)</option>
+        {% endif %}
+    </select>
+    <input type="text" id="query-keyword" placeholder="&#36755;&#20837;&#26597;&#35810;&#20851;&#38190;&#23383;..." onkeydown="if(event.key==='Enter')doQuery()">
+    <button id="query-button" class="btn btn-primary" type="button" onclick="doQuery()">&#26597;&#35810;</button>
+</div>
+
+<div id="query-results" class="table-container" style="margin-top:20px;"></div>
+
+<hr style="margin:30px 0;border-color:#e2e8f0">
+
+<div class="page-header"><h1>&#25209;&#37327;&#26597;&#35810; (&#19978;&#20256;&#25991;&#20214;)</h1></div>
+<div class="card">
+    <p style="color:var(--text-muted);margin-bottom:15px">
+        &#19978;&#20256;&#21547;&#26377; IP &#22320;&#22336;&#30340; Excel &#25110; CSV &#25991;&#20214;&#65292;&#31995;&#32479;&#33258;&#21160;&#26597;&#35810;&#27599;&#20010; IP &#30340;&#24402;&#23646;&#20449;&#24687;&#12290;
+        &#25903;&#25345;&#21333;&#20010; IP (&#22914; 10.1.1.1) &#25110;&#32593;&#27573; (&#22914; 10.1.1.0/24)&#12290;
+    </p>
+    <form id="batch-form" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label>&#36873;&#25321;&#25991;&#20214; (.xlsx / .csv)</label>
+                <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary">&#25209;&#37327;&#26597;&#35810;</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div id="batch-results" style="margin-top:20px"></div>
+
+<script>
+var TEXT = {
+    emptyKeyword: '\u8bf7\u8f93\u5165\u67e5\u8be2\u5173\u952e\u5b57',
+    noRows: '\u6ca1\u6709\u53ef\u663e\u793a\u7684\u6570\u636e',
+    loginExpired: '\u767b\u5f55\u72b6\u6001\u53ef\u80fd\u5df2\u8fc7\u671f\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u65b0\u767b\u5f55',
+    querying: '\u6b63\u5728\u67e5\u8be2\uff0c\u8bf7\u7a0d\u5019...',
+    queryFailed: '\u67e5\u8be2\u5931\u8d25\uff1a',
+    queryButton: '\u67e5\u8be2',
+    queryingButton: '\u67e5\u8be2\u4e2d...',
+    noMatch: '\u672a\u627e\u5230\u5339\u914d\u8bb0\u5f55',
+    foundPrefix: '\u627e\u5230 ',
+    foundSuffix: ' \u6761\u8bb0\u5f55',
+    batchTitle: '\u6279\u91cf\u67e5\u8be2\u7ed3\u679c',
+    batchButton: '\u6279\u91cf\u67e5\u8be2',
+    allocated: '\u5df2\u5206\u914d',
+    unallocated: '\u672a\u5206\u914d',
+    batchFailed: '\u6279\u91cf\u67e5\u8be2\u5931\u8d25'
+};
+
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function renderTable(rows) {
+    if (!rows || rows.length === 0) {
+        return '<p style="margin:20px;color:#999">' + TEXT.noRows + '</p>';
+    }
+
+    var keys = Object.keys(rows[0]).filter(function(k) { return k[0] !== '_'; });
+    var html = '<table class="data-table"><thead><tr>';
+    for (var i = 0; i < keys.length; i++) {
+        html += '<th>' + escapeHtml(keys[i]) + '</th>';
+    }
+    html += '</tr></thead><tbody>';
+
+    for (var r = 0; r < rows.length; r++) {
+        html += '<tr>';
+        for (var c = 0; c < keys.length; c++) {
+            html += '<td>' + escapeHtml(rows[r][keys[c]]) + '</td>';
+        }
+        html += '</tr>';
+    }
+
+    html += '</tbody></table>';
+    return html;
+}
+
+function parseJsonResponse(response) {
+    var contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        throw new Error(TEXT.loginExpired);
+    }
+    return response.json();
+}
+
+function doQuery() {
+    var type = document.getElementById('query-type').value;
+    var kw = document.getElementById('query-keyword').value.trim();
+    var btn = document.getElementById('query-button');
+    var results = document.getElementById('query-results');
+
+    if (!kw) {
+        results.innerHTML = '<p style="margin:20px;color:#999">' + TEXT.emptyKeyword + '</p>';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = TEXT.queryingButton;
+    results.innerHTML = '<p style="margin:20px;color:#999">' + TEXT.querying + '</p>';
+
+    fetch('/api/query', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({type: type, keyword: kw})
+    })
+        .then(parseJsonResponse)
+        .then(function(d) {
+            if (d.found) {
+                results.innerHTML = '<p style="margin:10px 0">' + TEXT.foundPrefix + escapeHtml((d.results || []).length) + TEXT.foundSuffix + '</p>' + renderTable(d.results);
+            } else {
+                results.innerHTML = '<p style="margin:20px;color:#999">' + TEXT.noMatch + '</p>';
+            }
+        })
+        .catch(function(err) {
+            results.innerHTML = '<p style="margin:20px;color:var(--danger)">' + TEXT.queryFailed + escapeHtml(err.message) + '</p>';
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = TEXT.queryButton;
+        });
+}
+
+document.getElementById('batch-form').onsubmit = function(e) {
+    e.preventDefault();
+    var btn = this.querySelector('button');
+    var output = document.getElementById('batch-results');
+    btn.disabled = true;
+    btn.textContent = TEXT.queryingButton;
+    output.innerHTML = '<div class="card"><p>' + TEXT.querying + '</p></div>';
+
+    var formData = new FormData(this);
+    fetch('/api/query/batch', {method: 'POST', body: formData})
+        .then(parseJsonResponse)
+        .then(function(d) {
+            if (d.success) {
+                var html = '<div class="card"><h3>' + TEXT.batchTitle + ' (' + escapeHtml(d.total) + ')</h3>';
+                html += renderTable(d.results);
+                html += '<p style="margin-top:10px">' + TEXT.allocated + ': ' + escapeHtml(d.used) + ' | ' + TEXT.unallocated + ': ' + escapeHtml(d.free) + '</p>';
+                html += '</div>';
+                output.innerHTML = html;
+            } else {
+                output.innerHTML = '<div class="card"><p>' + escapeHtml(d.message || TEXT.batchFailed) + '</p></div>';
+            }
+        })
+        .catch(function(err) {
+            output.innerHTML = '<div class="card"><p style="color:var(--danger)">' + TEXT.batchFailed + '\uff1a' + escapeHtml(err.message) + '</p></div>';
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = TEXT.batchButton;
+        });
+};
+</script>
+{% endblock %}

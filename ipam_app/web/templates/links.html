@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}链路管理{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>路由器互联链路管理</h1>
+    {% if role == 'admin' %}
+    <button class="btn btn-primary" onclick="showLinkForm()">+ 新增链路</button>
+    {% endif %}
+</div>
+
+<div class="table-container">
+    <table class="data-table">
+        <thead><tr><th>本端设备</th><th>本端接口</th><th>本端IP</th><th>掩码</th><th>对端设备</th><th>对端接口</th><th>对端IP</th><th>掩码</th><th>cost</th>{% if role == 'admin' %}<th>操作</th>{% endif %}</tr></thead>
+        <tbody>
+            {% for link in links %}
+            <tr>
+                <td>{{ link.get('本端设备名', '') }}</td>
+                <td>{{ link.get('本端接口', '') }}</td>
+                <td>{{ link.get('本端IP', '') }}</td>
+                <td>{{ link.get('掩码', '') }}</td>
+                <td>{{ link.get('对端设备名', '') }}</td>
+                <td>{{ link.get('对端接口', '') }}</td>
+                <td>{{ link.get('对端IP', '') }}</td>
+                <td>{{ link.get('掩码', '') }}</td>
+                <td>{{ link.get('cost', '') }}</td>
+                {% if role == 'admin' %}
+                <td>
+                    <button class="btn btn-sm" onclick="editLink('{{ link.get('本端设备名','') }}', '{{ link.get('本端接口','') }}')">编辑</button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if role == 'admin' %}
+<div id="link-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3 id="link-modal-title">新增链路</h3>
+        <form id="link-form">
+            <input type="hidden" id="link-orig-local">
+            <input type="hidden" id="link-orig-intf">
+            <div class="form-row">
+                <div class="form-group"><label>本端设备名</label><input type="text" id="link-local" required></div>
+                <div class="form-group"><label>本端接口</label><input type="text" id="link-local-intf"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>本端IP</label><input type="text" id="link-local-ip"></div>
+                <div class="form-group"><label>掩码</label><input type="text" id="link-mask"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>对端设备名</label><input type="text" id="link-remote"></div>
+                <div class="form-group"><label>对端接口</label><input type="text" id="link-remote-intf"></div>
+            </div>
+            <div class="form-row">
+                <div class="form-group"><label>对端IP</label><input type="text" id="link-remote-ip"></div>
+                <div class="form-group"><label>cost</label><input type="number" id="link-cost" value="1"></div>
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">保存</button>
+                <button type="button" class="btn" onclick="closeLinkModal()">取消</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<script>
+{% if role == 'admin' %}
+function showLinkForm() {
+    document.getElementById('link-modal-title').textContent = '新增链路';
+    document.getElementById('link-form').reset();
+    document.getElementById('link-orig-local').value = '';
+    document.getElementById('link-modal').style.display = 'flex';
+}
+function editLink(local, intf) {
+    document.getElementById('link-modal-title').textContent = '编辑链路';
+    document.getElementById('link-orig-local').value = local;
+    document.getElementById('link-orig-intf').value = intf;
+    document.getElementById('link-local').value = local;
+    document.getElementById('link-local').readOnly = true;
+    document.getElementById('link-local-intf').value = intf;
+    document.getElementById('link-modal').style.display = 'flex';
+}
+function closeLinkModal() { document.getElementById('link-modal').style.display = 'none'; document.getElementById('link-local').readOnly = false; }
+document.getElementById('link-form').onsubmit = function(e) {
+    e.preventDefault();
+    var origLocal = document.getElementById('link-orig-local').value;
+    var origIntf = document.getElementById('link-orig-intf').value;
+    var data = {
+        本端设备名: document.getElementById('link-local').value,
+        本端接口: document.getElementById('link-local-intf').value,
+        本端IP: document.getElementById('link-local-ip').value,
+        掩码: document.getElementById('link-mask').value,
+        对端设备名: document.getElementById('link-remote').value,
+        对端接口: document.getElementById('link-remote-intf').value,
+        对端IP: document.getElementById('link-remote-ip').value,
+        cost: document.getElementById('link-cost').value,
+    };
+    var url = origLocal ? '/api/links/update' : '/api/links/add';
+    if(origLocal) {
+        data._本端设备名 = origLocal;
+        data._本端接口 = origIntf;
+    }
+    fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+        .then(r=>r.json()).then(function(d){ alert(d.message); location.reload(); });
+};
+{% endif %}
+</script>
+{% endblock %}
