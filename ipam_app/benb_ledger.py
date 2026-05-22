@@ -7,10 +7,10 @@ from typing import Dict, List, Set
 from openpyxl import load_workbook
 
 import config
-import data_manager
 
 
 LEDGER_FILE = config.DATA_DIR / "BenB.csv"
+POOL_FILE = config.DATA_DIR / "BenB_pool.csv"
 LEDGER_COLUMNS = ["IP地址", "状态", "姓名", "账号"] + [f"预留{i}" for i in range(1, 14)] + ["房间号"]
 IP_PATTERN = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}\b")
 
@@ -197,18 +197,9 @@ def _network_from_row(row: Dict):
 def _company_pools():
     pools = []
 
-    for row in data_manager.read_csv(config.MASTER_POOL_FILE):
-        business_name = row.get("业务名称", "").strip()
-        if business_name not in {"公司本部", "公司内网", "公司内网地址"}:
-            continue
-        network = _network_from_row(row)
-        if network is not None:
-            pools.append(network)
-
-    for row in data_manager.read_csv(config.BUSINESS_FILES.get("xxnw")):
-        device = row.get("设备名称", "").strip()
-        unit = row.get("所属单位", "").strip()
-        if device != "公司本部" and unit != "公司本部":
+    for row in _read_pool_rows():
+        enabled = row.get("是否启用", "").strip()
+        if enabled not in {"是", "启用", "Y", "y", "yes", "YES", "1", "true", "True"}:
             continue
         network = _network_from_row(row)
         if network is not None:
@@ -218,6 +209,25 @@ def _company_pools():
     for pool in pools:
         unique[(pool.version, int(pool.network_address), pool.prefixlen)] = pool
     return sorted(unique.values(), key=lambda net: (int(net.network_address), net.prefixlen))
+
+
+def _read_pool_rows() -> List[Dict]:
+    rows = _read_csv_rows(POOL_FILE)
+    if not rows:
+        return []
+    header = rows[0]
+    data_rows = rows[1:] if "地址段" in "".join(header) else rows
+    result = []
+    for row in data_rows:
+        values = list(row) + [""] * max(0, 5 - len(row))
+        result.append({
+            "名称": values[0].strip(),
+            "地址段": values[1].strip(),
+            "掩码": values[2].strip(),
+            "用途": values[3].strip(),
+            "是否启用": values[4].strip(),
+        })
+    return result
 
 
 def _occupied_ips() -> Set[str]:
