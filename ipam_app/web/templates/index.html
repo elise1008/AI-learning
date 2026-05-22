@@ -36,14 +36,14 @@
             <span class="action-icon">🔍</span>
             <span>查询信息</span>
         </a>
+        <a href="{{ url_for('pcweb_page') }}" class="action-card">
+            <span class="action-icon">🔐</span>
+            <span>服务器登录</span>
+        </a>
         {% if role == 'admin' %}
         <a href="{{ url_for('ip_assign_page') }}" class="action-card">
             <span class="action-icon">🎯</span>
             <span>IP分配</span>
-        </a>
-        <a href="{{ url_for('import_page') }}" class="action-card">
-            <span class="action-icon">📥</span>
-            <span>导入数据</span>
         </a>
         {% endif %}
         <a href="{{ url_for('topology_page') }}" class="action-card">

@@ -459,42 +459,6 @@ def api_available_ips():
     return jsonify(ip_manager.get_available_ips(biz_name, count))
 
 
-# ====== 导入 ======
-
-@app.route("/import")
-@login_required
-@admin_required
-def import_page():
-    businesses = list(config.BUSINESS_FILES.keys())
-    return render_template("import.html", businesses=businesses, role=session.get("role"))
-
-
-@app.route("/api/import", methods=["POST"])
-@login_required
-@admin_required
-def api_import():
-    if "file" not in request.files:
-        return jsonify({"success": False, "message": "请选择文件"})
-
-    file = request.files["file"]
-    target_biz = request.form.get("biz", "")
-
-    if not target_biz:
-        return jsonify({"success": False, "message": "请选择目标业务"})
-
-    upload_path = config.EXPORT_DIR / file.filename
-    file.save(str(upload_path))
-
-    try:
-        result = importer.import_file(str(upload_path), target_biz)
-        logger.log(session["user"], f"导入: {target_biz} ({file.filename}) - 成功{result['imported']}条")
-    finally:
-        if upload_path.exists():
-            upload_path.unlink()
-
-    return jsonify(result)
-
-
 # ====== 拓扑图 ======
 
 @app.route("/topology")

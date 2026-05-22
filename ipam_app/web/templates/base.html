@@ -22,7 +22,6 @@
                 <li><a href="{{ url_for('pcweb_page') }}" class="{% if request.endpoint == 'pcweb_page' %}active{% endif %}">🔐 服务器登录</a></li>
                 {% if role == 'admin' %}
                 <li><a href="{{ url_for('ip_assign_page') }}" class="{% if request.endpoint == 'ip_assign_page' %}active{% endif %}">🎯 IP分配</a></li>
-                <li><a href="{{ url_for('import_page') }}" class="{% if request.endpoint == 'import_page' %}active{% endif %}">📥 导入数据</a></li>
                 {% endif %}
                 <li><a href="{{ url_for('topology_page') }}" class="{% if request.endpoint == 'topology_page' %}active{% endif %}">🗺️ 拓扑图</a></li>
                 <li><a href="{{ url_for('links_page') }}" class="{% if request.endpoint == 'links_page' %}active{% endif %}">🔗 链路管理</a></li>
