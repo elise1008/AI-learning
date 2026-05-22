@@ -15,6 +15,7 @@ from flask import (
 from functools import wraps
 import config
 import abc_checker
+import benb_ledger
 import data_manager
 import device_manager
 import ip_manager
@@ -255,6 +256,55 @@ def api_abc_check():
         f"桌管/V10/合规性核查: 总IP{result['total']}个, 合规{result['compliant']}个, 不合规{result['non_compliant']}个"
     )
     return _download_workbook(result["output_path"])
+
+
+@app.route("/api/tools/benb/search", methods=["POST"])
+@login_required
+def api_benb_search():
+    data = request.json or {}
+    keyword = data.get("keyword", "")
+    mode = data.get("mode", "single")
+    results = benb_ledger.batch_search(keyword) if mode == "batch" else benb_ledger.search(keyword)
+    return jsonify({"success": True, "results": results, "total": len(results)})
+
+
+@app.route("/api/tools/benb/save", methods=["POST"])
+@login_required
+def api_benb_save():
+    try:
+        result = benb_ledger.upsert(request.json or {})
+    except benb_ledger.BenBLedgerError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    logger.log(session["user"], f"本部基础台账{result['action']}: {result['row'].get('IP地址', '')}")
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/tools/benb/import", methods=["POST"])
+@login_required
+def api_benb_import():
+    upload_path = None
+    try:
+        upload_path = _save_uploaded_file(request.files.get("file"), {".xlsx", ".csv"})
+        result = benb_ledger.import_rows(upload_path)
+    except (ValueError, benb_ledger.BenBLedgerError) as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        logger.log(session["user"], f"本部基础台账批量导入失败: {exc}")
+        return jsonify({"success": False, "message": f"导入失败: {exc}"}), 500
+    finally:
+        if upload_path and upload_path.exists():
+            upload_path.unlink()
+
+    logger.log(session["user"], f"本部基础台账批量导入: 成功{result['imported']}条, 跳过{result['skipped']}条")
+    return jsonify({"success": True, **result})
+
+
+@app.route("/api/tools/benb/available", methods=["POST"])
+@login_required
+def api_benb_available():
+    data = request.json or {}
+    ips = benb_ledger.available_ips(data.get("count", 20))
+    return jsonify({"success": True, "ips": ips, "total": len(ips)})
 
 
 @app.route("/api/query", methods=["POST"])

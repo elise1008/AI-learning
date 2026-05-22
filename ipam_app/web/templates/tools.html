@@ -4,6 +4,76 @@
 <div class="page-header"><h1>工具集</h1></div>
 
 <div class="card">
+    <h3>本部基础台账</h3>
+    <p style="color:var(--text-muted);margin:10px 0 18px">
+        使用 data/BenB.csv 作为台账。支持按 IP、姓名、账号、房间号查找，手动新增/修改，批量导入，以及按公司本部网段查找可用 IP。
+    </p>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>单个关键词</label>
+            <input type="text" id="benb-keyword" placeholder="IP / 姓名 / 账号 / 房间号">
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button type="button" class="btn btn-primary" onclick="benbSearch('single')">查找</button>
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button type="button" class="btn" onclick="openBenbModal()">新增 / 修改</button>
+        </div>
+    </div>
+
+    <div class="form-row">
+        <div class="form-group">
+            <label>批量关键词（换行、空格、逗号分隔）</label>
+            <input type="text" id="benb-batch" placeholder="10.178.153.10  张三  301">
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button type="button" class="btn btn-primary" onclick="benbSearch('batch')">批量查找</button>
+        </div>
+        <div class="form-group" style="align-self:flex-end">
+            <button type="button" class="btn" onclick="benbAvailable()">查找可用 IP</button>
+        </div>
+    </div>
+
+    <form id="benb-import-form" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label>批量导入台账 (.xlsx / .csv，A-D列为IP/状态/姓名/账号，R列为房间号)</label>
+                <input type="file" name="file" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+                <button type="submit" class="btn">批量导入</button>
+            </div>
+        </div>
+    </form>
+
+    <div id="benb-result" style="margin-top:12px"></div>
+</div>
+
+<div id="benb-modal" class="modal" style="display:none">
+    <div class="modal-content">
+        <h3>新增 / 修改本部台账</h3>
+        <div class="form-row">
+            <div class="form-group"><label>IP地址</label><input id="benb-ip"></div>
+            <div class="form-group"><label>状态</label><input id="benb-status" placeholder="在用 / 可用 / 空闲"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>姓名</label><input id="benb-name"></div>
+            <div class="form-group"><label>账号</label><input id="benb-account"></div>
+        </div>
+        <div class="form-row">
+            <div class="form-group"><label>房间号</label><input id="benb-room"></div>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn btn-primary" onclick="saveBenb()">保存</button>
+            <button type="button" class="btn" onclick="closeBenbModal()">取消</button>
+        </div>
+    </div>
+</div>
+
+<div style="height:24px"></div>
+
+<div class="card">
     <h3>在职人员与邮箱账号对比</h3>
     <p style="color:var(--text-muted);margin:10px 0 18px">
         表格1 A列为人员姓名、B列为所在部门；表格2 A列为姓名、B列为邮箱账号。输出邮箱表存在但在职表不存在的疑似离职/退休账号。
@@ -115,6 +185,121 @@ function wireDownloadForm(formId, resultId, endpoint, fallbackName, buttonText) 
             });
     };
 }
+
+function renderBenbTable(rows) {
+    if (!rows || rows.length === 0) {
+        return '<p style="color:var(--text-muted)">没有匹配结果。</p>';
+    }
+    var keys = Object.keys(rows[0]);
+    var html = '<div class="table-container"><table class="data-table"><thead><tr>';
+    keys.forEach(function(key) { html += '<th>' + escapeHtml(key) + '</th>'; });
+    html += '<th>操作</th></tr></thead><tbody>';
+    rows.forEach(function(row) {
+        html += '<tr>';
+        keys.forEach(function(key) { html += '<td>' + escapeHtml(row[key]) + '</td>'; });
+        if (row['IP地址']) {
+            html += '<td><button type="button" class="btn btn-sm" data-row="' + escapeHtml(JSON.stringify(row)) + '" onclick="openBenbModalFromRow(this)">编辑</button></td>';
+        } else {
+            html += '<td></td>';
+        }
+        html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    return html;
+}
+
+function openBenbModal(row) {
+    row = row || {};
+    document.getElementById('benb-ip').value = row['IP地址'] || '';
+    document.getElementById('benb-status').value = row['状态'] || '';
+    document.getElementById('benb-name').value = row['姓名'] || '';
+    document.getElementById('benb-account').value = row['账号'] || '';
+    document.getElementById('benb-room').value = row['房间号'] || '';
+    document.getElementById('benb-modal').style.display = 'flex';
+}
+
+function openBenbModalFromRow(btn) {
+    openBenbModal(JSON.parse(btn.getAttribute('data-row') || '{}'));
+}
+
+function closeBenbModal() {
+    document.getElementById('benb-modal').style.display = 'none';
+}
+
+function benbSearch(mode) {
+    var keyword = mode === 'batch' ? document.getElementById('benb-batch').value : document.getElementById('benb-keyword').value;
+    var result = document.getElementById('benb-result');
+    result.innerHTML = '<p style="color:var(--text-muted)">正在查找...</p>';
+    fetch('/api/tools/benb/search', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({mode: mode, keyword: keyword})
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            result.innerHTML = data.success ? renderBenbTable(data.results) : '<p style="color:var(--danger)">' + escapeHtml(data.message) + '</p>';
+        })
+        .catch(function(err) {
+            result.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + '</p>';
+        });
+}
+
+function saveBenb() {
+    var payload = {
+        'IP地址': document.getElementById('benb-ip').value,
+        '状态': document.getElementById('benb-status').value,
+        '姓名': document.getElementById('benb-name').value,
+        '账号': document.getElementById('benb-account').value,
+        '房间号': document.getElementById('benb-room').value
+    };
+    fetch('/api/tools/benb/save', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(payload)
+    })
+        .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+        .then(function(res) {
+            if (!res.ok || !res.data.success) throw new Error(res.data.message || '保存失败');
+            closeBenbModal();
+            document.getElementById('benb-result').innerHTML = '<p style="color:var(--success)">保存成功。</p>' + renderBenbTable([res.data.row]);
+        })
+        .catch(function(err) {
+            document.getElementById('benb-result').innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + '</p>';
+        });
+}
+
+function benbAvailable() {
+    var result = document.getElementById('benb-result');
+    result.innerHTML = '<p style="color:var(--text-muted)">正在查找可用 IP...</p>';
+    fetch('/api/tools/benb/available', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({count: 20})
+    })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var rows = (data.ips || []).map(function(ip) { return {'可用IP': ip}; });
+            result.innerHTML = renderBenbTable(rows);
+        })
+        .catch(function(err) {
+            result.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + '</p>';
+        });
+}
+
+document.getElementById('benb-import-form').onsubmit = function(e) {
+    e.preventDefault();
+    var result = document.getElementById('benb-result');
+    result.innerHTML = '<p style="color:var(--text-muted)">正在导入...</p>';
+    fetch('/api/tools/benb/import', {method: 'POST', body: new FormData(this)})
+        .then(function(r) { return r.json().then(function(data) { return {ok: r.ok, data: data}; }); })
+        .then(function(res) {
+            if (!res.ok || !res.data.success) throw new Error(res.data.message || '导入失败');
+            result.innerHTML = '<p style="color:var(--success)">导入完成：成功 ' + escapeHtml(res.data.imported) + ' 条，跳过 ' + escapeHtml(res.data.skipped) + ' 条。</p>';
+        })
+        .catch(function(err) {
+            result.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + '</p>';
+        });
+};
 
 wireDownloadForm('staff-form', 'staff-result', '/api/tools/staff-compare', '疑似离职退休人员.xlsx', '生成疑似离职退休账号 Excel');
 wireDownloadForm('abc-form', 'abc-result', '/api/tools/abc-check', '桌管_V10_合规性安装汇总.xlsx', '生成合规核查 Excel');
