@@ -14,15 +14,18 @@ from flask import (
 )
 from functools import wraps
 import config
+import abc_checker
 import data_manager
 import device_manager
 import ip_manager
 import importer
 import nmap_report
+import staff_compare
 import topology
 import backup
 import auth
 import logger
+import uuid
 
 if getattr(sys, "frozen", False):
     template_dir = os.path.join(sys._MEIPASS, "web", "templates")
@@ -173,6 +176,85 @@ def pcweb_page():
     accounts = data_manager.get_pcweb_accounts()
     role = session.get("role")
     return render_template("pcweb.html", accounts=accounts, role=role)
+
+
+@app.route("/tools")
+@login_required
+def tools_page():
+    role = session.get("role")
+    return render_template("tools.html", role=role)
+
+
+def _save_uploaded_file(file, allowed_suffixes):
+    if not file or not file.filename:
+        raise ValueError("请选择文件")
+    suffix = Path(file.filename).suffix.lower()
+    if suffix not in allowed_suffixes:
+        raise ValueError("仅支持 .xlsx / .csv 文件")
+    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    path = config.EXPORT_DIR / f"upload_{uuid.uuid4().hex}{suffix}"
+    file.save(str(path))
+    return path
+
+
+def _download_workbook(path: Path):
+    return send_file(
+        str(path),
+        as_attachment=True,
+        download_name=path.name,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+
+@app.route("/api/tools/staff-compare", methods=["POST"])
+@login_required
+def api_staff_compare():
+    active_path = accounts_path = None
+    try:
+        active_path = _save_uploaded_file(request.files.get("active"), {".xlsx", ".csv"})
+        accounts_path = _save_uploaded_file(request.files.get("accounts"), {".xlsx", ".csv"})
+        result = staff_compare.create_staff_compare_workbook(active_path, accounts_path, config.EXPORT_DIR)
+    except (ValueError, staff_compare.StaffCompareError) as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        logger.log(session["user"], f"在职与邮箱账号对比失败: {exc}")
+        return jsonify({"success": False, "message": f"生成失败: {exc}"}), 500
+    finally:
+        for path in (active_path, accounts_path):
+            if path and path.exists():
+                path.unlink()
+
+    logger.log(
+        session["user"],
+        f"在职与邮箱账号对比: 在职{result['active_count']}人, 邮箱{result['account_count']}条, 疑似{result['suspicious_count']}条"
+    )
+    return _download_workbook(result["output_path"])
+
+
+@app.route("/api/tools/abc-check", methods=["POST"])
+@login_required
+def api_abc_check():
+    a_path = b_path = c_path = None
+    try:
+        a_path = _save_uploaded_file(request.files.get("a"), {".xlsx", ".csv"})
+        b_path = _save_uploaded_file(request.files.get("b"), {".xlsx", ".csv"})
+        c_path = _save_uploaded_file(request.files.get("c"), {".xlsx", ".csv"})
+        result = abc_checker.create_abc_check_workbook(a_path, b_path, c_path, config.EXPORT_DIR)
+    except (ValueError, abc_checker.AbcCheckError) as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        logger.log(session["user"], f"桌管/V10/合规性核查失败: {exc}")
+        return jsonify({"success": False, "message": f"生成失败: {exc}"}), 500
+    finally:
+        for path in (a_path, b_path, c_path):
+            if path and path.exists():
+                path.unlink()
+
+    logger.log(
+        session["user"],
+        f"桌管/V10/合规性核查: 总IP{result['total']}个, 合规{result['compliant']}个, 不合规{result['non_compliant']}个"
+    )
+    return _download_workbook(result["output_path"])
 
 
 @app.route("/api/query", methods=["POST"])

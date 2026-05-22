@@ -18,6 +18,8 @@
                 <li><a href="{{ url_for('index') }}" class="{% if request.endpoint == 'index' %}active{% endif %}">🏠 首页</a></li>
                 <li><a href="{{ url_for('devices_page') }}" class="{% if request.endpoint == 'devices_page' %}active{% endif %}">📋 设备管理</a></li>
                 <li><a href="{{ url_for('query_page') }}" class="{% if request.endpoint == 'query_page' %}active{% endif %}">🔍 查询信息</a></li>
+                <li><a href="{{ url_for('tools_page') }}" class="{% if request.endpoint == 'tools_page' %}active{% endif %}">🧰 工具集</a></li>
+                <li><a href="{{ url_for('pcweb_page') }}" class="{% if request.endpoint == 'pcweb_page' %}active{% endif %}">🔐 服务器登录</a></li>
                 {% if role == 'admin' %}
                 <li><a href="{{ url_for('ip_assign_page') }}" class="{% if request.endpoint == 'ip_assign_page' %}active{% endif %}">🎯 IP分配</a></li>
                 <li><a href="{{ url_for('import_page') }}" class="{% if request.endpoint == 'import_page' %}active{% endif %}">📥 导入数据</a></li>

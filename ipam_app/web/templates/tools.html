@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}工具集{% endblock %}
+{% block content %}
+<div class="page-header"><h1>工具集</h1></div>
+
+<div class="card">
+    <h3>在职人员与邮箱账号对比</h3>
+    <p style="color:var(--text-muted);margin:10px 0 18px">
+        表格1 A列为人员姓名、B列为所在部门；表格2 A列为姓名、B列为邮箱账号。输出邮箱表存在但在职表不存在的疑似离职/退休账号。
+    </p>
+    <form id="staff-form" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label>在职人员名单 (.xlsx / .csv)</label>
+                <input type="file" name="active" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group">
+                <label>邮箱账号数据 (.xlsx / .csv)</label>
+                <input type="file" name="accounts" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary">生成疑似离职退休账号 Excel</button>
+            </div>
+        </div>
+    </form>
+    <div id="staff-result" style="margin-top:12px"></div>
+</div>
+
+<div class="card" style="margin-top:24px">
+    <h3>桌管 / V10 / 合规性 三表核查</h3>
+    <p style="color:var(--text-muted);margin:10px 0 18px">
+        上传三个系统导出的 IP 清单，系统提取所有 IPv4 地址并取并集，标记三项软件安装状态和合规结果。
+    </p>
+    <form id="abc-form" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label>桌管文件 (.xlsx / .csv)</label>
+                <input type="file" name="a" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group">
+                <label>V10 文件 (.xlsx / .csv)</label>
+                <input type="file" name="b" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group">
+                <label>合规性文件 (.xlsx / .csv)</label>
+                <input type="file" name="c" accept=".xlsx,.csv" required>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary">生成合规核查 Excel</button>
+            </div>
+        </div>
+    </form>
+    <div id="abc-result" style="margin-top:12px"></div>
+</div>
+
+<script>
+function escapeHtml(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function filenameFromResponse(response, fallback) {
+    var disposition = response.headers.get('content-disposition') || '';
+    var match = disposition.match(/filename\*=UTF-8''([^;]+)/i) || disposition.match(/filename="?([^"]+)"?/i);
+    return match && match[1] ? decodeURIComponent(match[1]) : fallback;
+}
+
+function downloadBlob(blob, filename) {
+    var url = window.URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
+}
+
+function wireDownloadForm(formId, resultId, endpoint, fallbackName, buttonText) {
+    document.getElementById(formId).onsubmit = function(e) {
+        e.preventDefault();
+        var btn = this.querySelector('button');
+        var result = document.getElementById(resultId);
+        var originalText = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = '正在生成...';
+        result.innerHTML = '<p style="color:var(--text-muted)">正在生成 Excel，请稍候...</p>';
+
+        fetch(endpoint, {method: 'POST', body: new FormData(this)})
+            .then(function(response) {
+                var contentType = response.headers.get('content-type') || '';
+                if (!response.ok) {
+                    if (contentType.includes('application/json')) {
+                        return response.json().then(function(data) {
+                            throw new Error(data.message || '生成失败');
+                        });
+                    }
+                    throw new Error('登录状态可能已过期，请刷新页面后重试');
+                }
+                return response.blob().then(function(blob) {
+                    downloadBlob(blob, filenameFromResponse(response, fallbackName));
+                    result.innerHTML = '<p style="color:var(--success)">Excel 已生成并开始下载。</p>';
+                });
+            })
+            .catch(function(err) {
+                result.innerHTML = '<p style="color:var(--danger)">' + escapeHtml(err.message) + '</p>';
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.textContent = buttonText || originalText;
+            });
+    };
+}
+
+wireDownloadForm('staff-form', 'staff-result', '/api/tools/staff-compare', '疑似离职退休人员.xlsx', '生成疑似离职退休账号 Excel');
+wireDownloadForm('abc-form', 'abc-result', '/api/tools/abc-check', '桌管_V10_合规性安装汇总.xlsx', '生成合规核查 Excel');
+</script>
+{% endblock %}
