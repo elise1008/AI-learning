@@ -18,6 +18,7 @@ import data_manager
 import device_manager
 import ip_manager
 import importer
+import nmap_report
 import topology
 import backup
 import auth
@@ -166,6 +167,14 @@ def query_page():
     return render_template("query.html", role=role)
 
 
+@app.route("/pcweb")
+@login_required
+def pcweb_page():
+    accounts = data_manager.get_pcweb_accounts()
+    role = session.get("role")
+    return render_template("pcweb.html", accounts=accounts, role=role)
+
+
 @app.route("/api/query", methods=["POST"])
 @login_required
 def api_query():
@@ -239,6 +248,49 @@ def api_batch_query():
         "results": results,
         "message": f"查询完成: {used} 已分配, {free} 未分配"
     })
+
+
+@app.route("/api/query/nmap-risk", methods=["POST"])
+@login_required
+def api_nmap_risk_report():
+    if "file" not in request.files:
+        return jsonify({"success": False, "message": "请选择 nmap txt 文件"}), 400
+
+    file = request.files["file"]
+    if not file.filename:
+        return jsonify({"success": False, "message": "请选择 nmap txt 文件"}), 400
+
+    suffix = Path(file.filename).suffix.lower()
+    if suffix != ".txt":
+        return jsonify({"success": False, "message": "仅支持 .txt 格式的 nmap 输出文件"}), 400
+
+    raw = file.read()
+    if not raw:
+        return jsonify({"success": False, "message": "上传的 nmap 文件为空"}), 400
+
+    try:
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("gbk")
+        report = nmap_report.create_nmap_risk_workbook(text, config.EXPORT_DIR)
+    except nmap_report.NmapReportError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        logger.log(session["user"], f"Nmap高危端口归属分析失败: {file.filename} - {exc}")
+        return jsonify({"success": False, "message": f"生成失败: {exc}"}), 500
+
+    logger.log(
+        session["user"],
+        f"Nmap高危端口归属分析: {file.filename} "
+        f"扫描主机{report['scanned_hosts']}个, 开放高危{report['open_risk_hosts']}个"
+    )
+    return send_file(
+        str(report["output_path"]),
+        as_attachment=True,
+        download_name=report["output_path"].name,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 # ====== IP 分配 ======
@@ -367,6 +419,23 @@ def api_topology_image(image_type):
         return "Invalid type", 400
     if img_path.exists():
         return send_file(str(img_path), mimetype="image/png")
+    return "Image not found", 404
+
+
+@app.route("/api/topology/download/<image_type>")
+@login_required
+def api_topology_download(image_type):
+    if image_type == "topology":
+        img_path = config.TOPOLOGY_OUTPUT
+        download_name = "topology.png"
+    elif image_type == "path":
+        img_path = config.PATH_ANALYSIS_OUTPUT
+        download_name = "path_analysis.png"
+    else:
+        return "Invalid type", 400
+
+    if img_path.exists():
+        return send_file(str(img_path), mimetype="image/png", as_attachment=True, download_name=download_name)
     return "Image not found", 404
 
 

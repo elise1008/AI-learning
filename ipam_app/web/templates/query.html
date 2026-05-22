@@ -40,6 +40,29 @@
 
 <div id="batch-results" style="margin-top:20px"></div>
 
+<hr style="margin:30px 0;border-color:#e2e8f0">
+
+<div class="page-header"><h1>Nmap 高危端口归属分析</h1></div>
+<div class="card">
+    <p style="color:var(--text-muted);margin-bottom:15px">
+        上传 nmap txt 扫描结果，系统会提取 21、22、135、137、138、139、445、3389 中处于 open 状态的高危端口，
+        自动查询 IPAM 归属并下载 Excel。
+    </p>
+    <form id="nmap-risk-form" enctype="multipart/form-data">
+        <div class="form-row">
+            <div class="form-group">
+                <label>选择 nmap 文件 (.txt)</label>
+                <input type="file" name="file" accept=".txt" required>
+            </div>
+            <div class="form-group" style="align-self:flex-end">
+                <button type="submit" class="btn btn-primary">生成高危端口归属 Excel</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<div id="nmap-risk-results" style="margin-top:20px"></div>
+
 <script>
 var TEXT = {
     emptyKeyword: '\u8bf7\u8f93\u5165\u67e5\u8be2\u5173\u952e\u5b57',
@@ -54,6 +77,10 @@ var TEXT = {
     foundSuffix: ' \u6761\u8bb0\u5f55',
     batchTitle: '\u6279\u91cf\u67e5\u8be2\u7ed3\u679c',
     batchButton: '\u6279\u91cf\u67e5\u8be2',
+    nmapButton: '生成高危端口归属 Excel',
+    nmapWorkingButton: '正在生成...',
+    nmapDownloading: '正在生成 Excel，请稍候...',
+    nmapFailed: 'Nmap 高危端口归属分析失败',
     allocated: '\u5df2\u5206\u914d',
     unallocated: '\u672a\u5206\u914d',
     batchFailed: '\u6279\u91cf\u67e5\u8be2\u5931\u8d25'
@@ -165,6 +192,53 @@ document.getElementById('batch-form').onsubmit = function(e) {
         .finally(function() {
             btn.disabled = false;
             btn.textContent = TEXT.batchButton;
+        });
+};
+
+document.getElementById('nmap-risk-form').onsubmit = function(e) {
+    e.preventDefault();
+    var btn = this.querySelector('button');
+    var output = document.getElementById('nmap-risk-results');
+    btn.disabled = true;
+    btn.textContent = TEXT.nmapWorkingButton;
+    output.innerHTML = '<div class="card"><p>' + TEXT.nmapDownloading + '</p></div>';
+
+    var formData = new FormData(this);
+    fetch('/api/query/nmap-risk', {method: 'POST', body: formData})
+        .then(function(response) {
+            var contentType = response.headers.get('content-type') || '';
+            if (!response.ok) {
+                if (contentType.includes('application/json')) {
+                    return response.json().then(function(d) {
+                        throw new Error(d.message || TEXT.nmapFailed);
+                    });
+                }
+                throw new Error(TEXT.loginExpired);
+            }
+            return response.blob().then(function(blob) {
+                var disposition = response.headers.get('content-disposition') || '';
+                var filename = 'nmap_高危端口归属.xlsx';
+                var match = disposition.match(/filename\*=UTF-8''([^;]+)/i) || disposition.match(/filename="?([^"]+)"?/i);
+                if (match && match[1]) {
+                    filename = decodeURIComponent(match[1]);
+                }
+                var url = window.URL.createObjectURL(blob);
+                var link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                window.URL.revokeObjectURL(url);
+                output.innerHTML = '<div class="card"><p>Excel 已生成并开始下载。</p></div>';
+            });
+        })
+        .catch(function(err) {
+            output.innerHTML = '<div class="card"><p style="color:var(--danger)">' + TEXT.nmapFailed + '：' + escapeHtml(err.message) + '</p></div>';
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.textContent = TEXT.nmapButton;
         });
 };
 </script>
